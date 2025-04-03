@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2021 Rockchip Electronics Co., Ltd.
+ * Copyright (c) 2023 EmbedFire <embedfire@embedfire.com>
+ */
+/dts-v1/;
+
+#include "rk3588s-lubancat-4.dtsi"
+#include "rk3588-android.dtsi"
+
+// 野火5.5寸屏幕
+#include "rk3588s-lubancat-dsi0-ebf410125_1080p.dtsi"
+#include "rk3588s-lubancat-dsi1-ebf410125_1080p.dtsi"
+
+/ {
+	model = "Embedfire LubanCat-4";
+	compatible = "embedfire,rk3588s-lubancat-4", "rockchip,rk3588";
+};

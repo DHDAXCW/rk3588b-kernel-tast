@@ -1,0 +1,84 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2021 Rockchip Electronics Co., Ltd.
+ * Copyright (c) 2023 EmbedFire <embedfire@embedfire.com>
+ */
+
+/dts-v1/;
+
+#include "rk3588-lubancat-5-v2.dtsi"
+#include "rk3588-android.dtsi"
+
+/ {
+	model = "Embedfire LubanCat-5-v2";
+	compatible = "embefire,rk3588-lubancat-5-v2", "rockchip,rk3588";
+};
+
+/* hdmi0 display */
+
+&hdmi0 {
+	enable-gpios = <&gpio1 RK_PC4 GPIO_ACTIVE_HIGH>;
+	cec-enable = "true";
+	status = "okay";
+};
+
+&route_hdmi0{
+	status = "okay";
+	connect = <&vp0_out_hdmi0>;
+};
+
+&hdmi0_in_vp0 {
+	status = "okay";
+};
+
+&hdptxphy_hdmi0 {
+	status = "okay";
+};
+
+&hdmi0_sound {
+	status = "okay";
+};
+
+/* hdmi1 display */
+
+&hdmi1 {
+	enable-gpios = <&gpio1 RK_PC6 GPIO_ACTIVE_HIGH>;
+	cec-enable = "true";
+	status = "okay";
+};
+
+&hdmi1_in_vp1 {
+	status = "okay";
+};
+
+&route_hdmi1{
+	status = "okay";
+	connect = <&vp1_out_hdmi1>;
+};
+
+&hdptxphy_hdmi1 {
+	status = "okay";
+};
+
+&hdmi1_sound {
+	status = "okay";
+};
+
+/* dp0 display */
+
+&dp0 {
+	status = "okay";
+};
+
+&dp0_in_vp2 {
+	status = "okay";
+};
+
+&route_dp0 {
+	status = "okay";
+	connect = <&vp2_out_dp0>;	
+};
+
+&dp0_sound {
+	status = "okay";
+};
