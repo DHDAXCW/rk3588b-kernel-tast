@@ -448,10 +448,6 @@
 	};
 };
 
-&dmc_opp_table {
-	/delete-node/ opp-2750000000;
-};
-
 &rockchip_suspend {
 	status = "okay";
 	rockchip,sleep-debug-en = <1>;
@@ -519,6 +515,8 @@
 
 &dmc {
 	status = "okay";
+	center-supply = <&vdd_ddr_s0>;
+	mem-supply = <&vdd_log_s0>;
 };
 
 &i2c0 {
