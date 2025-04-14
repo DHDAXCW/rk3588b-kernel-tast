@@ -2340,7 +2340,7 @@
 					   <700000 700000 750000>;
 		};
 		opp-1848000000 {
-			opp-supported-hw = <0x10 0xffff>;
+			opp-supported-hw = <0xf9 0xffff>;
 			opp-hz = /bits/ 64 <1848000000>;
 			opp-microvolt = <875000 875000 875000>,
 					<750000 750000 750000>;

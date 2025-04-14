@@ -1422,6 +1422,16 @@ int rockchip_get_soc_info(struct device *dev, struct device_node *np, int *bin,
 		}
 	}
 
+	if (of_property_match_string(np, "nvmem-cell-names", "customer_demand") >= 0) {
+		ret = rockchip_nvmem_cell_read_u8(np, "customer_demand", &value);
+		if (ret) {
+				dev_err(dev, "Failed to get customer_demand\n");
+				return ret;
+		}
+		if (value == 0x3)
+				*bin = 4;
+	}
+	
 	/* M */
 	if (value == 0xd)
 		*bin = 1;
@@ -1429,16 +1439,6 @@ int rockchip_get_soc_info(struct device *dev, struct device_node *np, int *bin,
 	else if (value == 0xa)
 		*bin = 2;
 
-        if (of_property_match_string(np, "nvmem-cell-names", "customer_demand") >= 0) {
-               ret = rockchip_nvmem_cell_read_u8(np, "customer_demand", &value);
-               if (ret) {
-                       dev_err(dev, "Failed to get customer_demand\n");
-                       return ret;
-               }
-               if (value == 0x3)
-                       *bin = 4;
-        }
-		
 	if (*bin < 0)
 		*bin = 0;
 	dev_info(dev, "bin=%d\n", *bin);

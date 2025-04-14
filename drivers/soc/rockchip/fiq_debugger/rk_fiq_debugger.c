@@ -179,11 +179,13 @@ static int debug_getc(struct platform_device *pdev)
 
 	if (lsr & UART_LSR_DR) {
 		temp = rk_fiq_read(t, UART_RX);
-		buf[n & 0x1f] = temp;
-		n++;
-		if (temp == 'q' && n > 2) {
-			if ((buf[(n - 2) & 0x1f] == 'i') &&
-			    (buf[(n - 3) & 0x1f] == 'f'))
+		buf[++n & 0x1f] = temp;
+
+		if (temp == 'q') {
+			if ((buf[(n - 1) & 0x1f] == 'i') &&
+			    (buf[(n - 2) & 0x1f] == 'f') &&
+			    (buf[(n - 3) & 0x1f] != '_') &&
+			    (buf[(n - 3) & 0x1f] != ' '))
 				return FIQ_DEBUGGER_BREAK;
 			else
 				return temp;
@@ -230,8 +232,8 @@ static void debug_flush(struct platform_device *pdev)
 #ifdef CONFIG_RK_CONSOLE_THREAD
 #define FIFO_SIZE SZ_64K
 #define TTY_FIFO_SIZE SZ_64K
-static DEFINE_KFIFO(fifo, unsigned char, FIFO_SIZE);
-static DEFINE_KFIFO(tty_fifo, unsigned char, TTY_FIFO_SIZE);
+static struct kfifo fifo;
+static struct kfifo tty_fifo;
 static bool console_thread_stop; /* write on console_write */
 static bool console_thread_running; /* write on console_thread */
 static unsigned int console_dropped_messages;
@@ -240,6 +242,28 @@ static int write_room(struct platform_device *pdev)
 {
 	return (TTY_FIFO_SIZE - kfifo_len(&tty_fifo));
 }
+
+#define console_poll(cond, count, us) \
+do { \
+	if (!IS_ENABLED(CONFIG_HIGH_RES_TIMERS) && CONFIG_HZ < 1000 && us < 1000) { \
+		if (!(cond)) { \
+			ktime_t timeout = ktime_add_us(ktime_get(), us * count); \
+			int oldnice = task_nice(current); \
+			if (!(cond)) { \
+				set_user_nice(current, MAX_NICE); \
+				while (!(cond)) { \
+					if (ktime_compare(ktime_get(), timeout) > 0) \
+						break; \
+					schedule(); \
+				} \
+				set_user_nice(current, oldnice); \
+			} \
+		} \
+	} else { \
+		while (!(cond) && count--) \
+			usleep_range(us, us + us / 20); \
+	} \
+} while (0)
 
 static void console_putc(struct platform_device *pdev, unsigned int c)
 {
@@ -252,9 +276,7 @@ static void console_putc(struct platform_device *pdev, unsigned int c)
 	if (t->baudrate == 115200)
 		us = 5160;	/* the time to send 60 byte for baudrate 115200 */
 
-	while (!(rk_fiq_read(t, UART_USR) & UART_USR_TX_FIFO_NOT_FULL) &&
-	       count--)
-		usleep_range(us, us + us / 20);
+	console_poll(rk_fiq_read(t, UART_USR) & UART_USR_TX_FIFO_NOT_FULL, count, us);
 
 	rk_fiq_write(t, c, UART_TX);
 }
@@ -334,7 +356,7 @@ static int console_thread(void *data)
 		unsigned int dropped;
 
 		set_current_state(TASK_INTERRUPTIBLE);
-		if (kfifo_is_empty(&fifo) && kfifo_is_empty(&tty_fifo)) {
+		if (console_thread_stop || (kfifo_is_empty(&fifo) && kfifo_is_empty(&tty_fifo))) {
 			smp_store_mb(console_thread_running, false);
 			schedule();
 			smp_store_mb(console_thread_running, true);
@@ -344,13 +366,13 @@ static int console_thread(void *data)
 		set_current_state(TASK_RUNNING);
 
 		while (!console_thread_stop && (!kfifo_is_empty(&fifo) || !kfifo_is_empty(&tty_fifo))) {
-			while (kfifo_get(&fifo, &c)) {
+			while (!console_thread_stop && kfifo_get(&fifo, &c)) {
 				console_put(pdev, &c, 1);
 				if (c == '\n')
 					break;
 			}
 
-			while (kfifo_get(&tty_fifo, &c)) {
+			while (!console_thread_stop && kfifo_get(&tty_fifo, &c)) {
 				console_putc(pdev, c);
 				len_tty++;
 				if (c == '\n')
@@ -418,6 +440,8 @@ static int tty_write(struct platform_device *pdev, const char *s, int count)
 	unsigned int ret = 0;
 	struct rk_fiq_debugger *t;
 
+	if (console_thread_stop)
+		return count;
 	t = container_of(dev_get_platdata(&pdev->dev), typeof(*t), pdata);
 
 	if (count > 0) {
@@ -759,6 +783,11 @@ static int fiq_debugger_cpu_offine_migrate_fiq(unsigned int cpu)
 	if ((sip_fiq_debugger_is_enabled()) &&
 	    (sip_fiq_debugger_get_target_cpu() == cpu)) {
 		target_cpu = cpumask_any_but(cpu_online_mask, cpu);
+		if (target_cpu >= nr_cpu_ids) {
+			pr_err("%s: migrate fiq fail!\n", __func__);
+			return -EBUSY;
+		}
+
 		sip_fiq_debugger_switch_cpu(target_cpu);
 	}
 
@@ -1081,7 +1110,17 @@ static int __init rk_fiqdbg_probe(struct platform_device *pdev)
 		pr_err("fiq-debugger get clock fail\n");
 		return -EINVAL;
 	}
+#ifdef CONFIG_RK_CONSOLE_THREAD
+	if (kfifo_alloc(&fifo, FIFO_SIZE, GFP_KERNEL)) {
+		pr_err("fiq-debugger alloc fifo fail\n");
+		return -ENOMEM;
+	}
 
+	if (kfifo_alloc(&tty_fifo, TTY_FIFO_SIZE, GFP_KERNEL)) {
+		pr_err("fiq-debugger alloc tty_fifo fail\n");
+		return -ENOMEM;
+	}
+#endif
 	clk_prepare_enable(clk);
 	clk_prepare_enable(pclk);
 

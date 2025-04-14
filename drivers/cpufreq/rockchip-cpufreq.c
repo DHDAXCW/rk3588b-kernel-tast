@@ -115,6 +115,15 @@ static int rk3288_get_soc_info(struct device *dev, struct device_node *np,
 		else if (value & 0x01)
 			*bin = 2;
 	}
+	if (of_property_match_string(np, "nvmem-cell-names", "customer_demand") >= 0) {
+		ret = rockchip_nvmem_cell_read_u8(np, "customer_demand", &value);
+		if (ret) {
+			dev_err(dev, "Failed to get customer_demand\n");
+			return ret;
+		}
+		if (value == 0x3)
+			*bin = 4;
+	}
 	if (*bin >= 0)
 		dev_info(dev, "bin=%d\n", *bin);
 
@@ -213,7 +222,6 @@ static int rk3588_get_soc_info(struct device *dev, struct device_node *np,
 		else if (value == 0xa)
 			*bin = 2;
 	}
-
 	if (of_property_match_string(np, "nvmem-cell-names", "customer_demand") >= 0) {
 		ret = rockchip_nvmem_cell_read_u8(np, "customer_demand", &value);
 		if (ret) {
@@ -615,11 +623,14 @@ static int rockchip_cpufreq_cluster_init(int cpu, struct cluster_info *cluster)
 	}
 	if (opp_info->data && opp_info->data->get_soc_info)
 		opp_info->data->get_soc_info(dev, np, &bin, &process);
+	rockchip_get_soc_info(dev, np, &bin, &process);
+	rockchip_init_pvtpll_table(&cluster->opp_info, bin);
 	rockchip_get_scale_volt_sel(dev, "cpu_leakage", reg_name, bin, process,
 				    &cluster->scale, &volt_sel);
 	if (opp_info->data && opp_info->data->set_soc_info)
 		opp_info->data->set_soc_info(dev, np, bin, process, volt_sel);
 	pname_table = rockchip_set_opp_prop_name(dev, process, volt_sel);
+	rockchip_set_opp_supported_hw(dev, np, bin, volt_sel);
 
 	if (of_find_property(dev->of_node, "cpu-supply", NULL) &&
 	    of_find_property(dev->of_node, "mem-supply", NULL)) {
